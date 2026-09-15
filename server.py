@@ -60,8 +60,11 @@ class Auth0TokenVerifier(TokenVerifier):
             )
 
         except Exception as exc:
-            print(f"Token verification failed: {exc}")
-            return None
+    print(
+        f"Token verification failed: {type(exc).__name__}: {exc}",
+        flush=True,
+    )
+    return None
 
 
 mcp = MCPServer(
