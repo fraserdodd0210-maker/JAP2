@@ -1,12 +1,12 @@
 import os
 import httpx
 
-from mcp.server import MCPServer
+from mcp.server.fastmcp import FastMCP
 
 JAP_API_URL = "https://justanotherpanel.com/api/v2"
 JAP_API_KEY = os.environ.get("JAP_API_KEY")
 
-mcp = MCPServer("JAP Connector")
+mcp = FastMCP("JAP Connector")
 
 
 async def jap_request(action: str, **kwargs):
@@ -33,7 +33,7 @@ async def get_balance():
 
 @mcp.tool()
 async def list_services():
-    """List services available on the JAP account."""
+    """List the services available on the JAP account."""
     return await jap_request("services")
 
 
