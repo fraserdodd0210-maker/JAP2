@@ -152,6 +152,81 @@ async def get_order_status(order_id: int):
     )
 
 
+@mcp.tool()
+async def place_order(
+    service: int,
+    link: str,
+    quantity: int | None = None,
+    runs: int | None = None,
+    interval: int | None = None,
+    comments: str | None = None,
+    usernames: str | None = None,
+    hashtags: str | None = None,
+    hashtag: str | None = None,
+    username: str | None = None,
+    min_quantity: int | None = None,
+    max_quantity: int | None = None,
+    posts: int | None = None,
+    delay: int | None = None,
+    expiry: str | None = None,
+    old_posts: int | None = None,
+):
+    """Place a new order on JAP.
+
+    Required for almost all services (likes, comments, follows, views, etc.):
+        service  -- the JAP service ID (see list_services)
+        link     -- the URL of the post/profile/page to target
+        quantity -- how many units to order
+
+    Optional, only needed for specific service categories:
+        runs, interval             -- drip-feed delivery (spread the order over time)
+        comments                   -- newline-separated custom comments
+                                       (for "custom comments" services; quantity can
+                                       be omitted when comments is provided)
+        usernames                  -- newline-separated usernames (for "mentions" services)
+        hashtags, hashtag          -- for hashtag-targeted services
+        username                   -- for services that target by username instead of link
+        min_quantity, max_quantity -- for auto/subscription-style services (sent as
+                                       JAP's "min"/"max" fields)
+        posts                      -- for subscription services: number of posts to cover
+        delay                      -- for subscription services: delay between posts (minutes)
+        expiry                     -- for subscription services: expiry date (mm/dd/yyyy)
+        old_posts                  -- for subscription services: include existing posts
+
+    Returns JAP's raw response: typically {"order": <id>} on success, or
+    {"error": "<message>"} if JAP rejects the order (e.g. bad service ID,
+    quantity out of range, or insufficient balance).
+    """
+
+    if quantity is None and comments is None:
+        raise ValueError("place_order needs either 'quantity' or 'comments'.")
+
+    params = {
+        "service": service,
+        "link": link,
+    }
+
+    optional = {
+        "quantity": quantity,
+        "runs": runs,
+        "interval": interval,
+        "comments": comments,
+        "usernames": usernames,
+        "hashtags": hashtags,
+        "hashtag": hashtag,
+        "username": username,
+        "min": min_quantity,
+        "max": max_quantity,
+        "posts": posts,
+        "delay": delay,
+        "expiry": expiry,
+        "old_posts": old_posts,
+    }
+    params.update({k: v for k, v in optional.items() if v is not None})
+
+    return await jap_request("add", **params)
+
+
 # --------------------------------------------------
 # TRANSPORT SECURITY
 # --------------------------------------------------
