@@ -8,10 +8,20 @@ from jwt import PyJWKClient
 from mcp.server import MCPServer
 from mcp.server.auth.provider import AccessToken, TokenVerifier
 from mcp.server.auth.settings import AuthSettings
+from mcp.server.transport_security import TransportSecuritySettings
 
+
+# --------------------------------------------------
+# JAP SETTINGS
+# --------------------------------------------------
 
 JAP_API_URL = "https://justanotherpanel.com/api/v2"
 JAP_API_KEY = os.environ.get("JAP_API_KEY")
+
+
+# --------------------------------------------------
+# AUTH0 SETTINGS
+# --------------------------------------------------
 
 AUTH0_DOMAIN = os.environ.get("AUTH0_DOMAIN")
 AUTH0_AUDIENCE = os.environ.get("AUTH0_AUDIENCE")
@@ -28,7 +38,12 @@ AUTH0_JWKS_URL = f"https://{AUTH0_DOMAIN}/.well-known/jwks.json"
 jwks_client = PyJWKClient(AUTH0_JWKS_URL)
 
 
+# --------------------------------------------------
+# AUTH0 TOKEN VERIFIER
+# --------------------------------------------------
+
 class Auth0TokenVerifier(TokenVerifier):
+
     async def verify_token(self, token: str) -> AccessToken | None:
         try:
             signing_key = jwks_client.get_signing_key_from_jwt(token)
@@ -67,6 +82,10 @@ class Auth0TokenVerifier(TokenVerifier):
             return None
 
 
+# --------------------------------------------------
+# MCP SERVER
+# --------------------------------------------------
+
 mcp = MCPServer(
     "JAP Connector",
     token_verifier=Auth0TokenVerifier(),
@@ -79,7 +98,12 @@ mcp = MCPServer(
 )
 
 
+# --------------------------------------------------
+# JAP API REQUEST
+# --------------------------------------------------
+
 async def jap_request(action: str, **kwargs):
+
     if not JAP_API_KEY:
         raise RuntimeError("JAP_API_KEY is not configured")
 
@@ -90,27 +114,60 @@ async def jap_request(action: str, **kwargs):
     }
 
     async with httpx.AsyncClient(timeout=30) as client:
-        response = await client.post(JAP_API_URL, data=payload)
+        response = await client.post(
+            JAP_API_URL,
+            data=payload,
+        )
+
         response.raise_for_status()
+
         return response.json()
 
+
+# --------------------------------------------------
+# MCP TOOLS
+# --------------------------------------------------
 
 @mcp.tool()
 async def get_balance():
     """Get the current JAP account balance."""
+
     return await jap_request("balance")
 
 
 @mcp.tool()
 async def list_services():
     """List the services available on the JAP account."""
+
     return await jap_request("services")
 
 
 @mcp.tool()
 async def get_order_status(order_id: int):
     """Get the status of an existing JAP order."""
-    return await jap_request("status", order=order_id)
+
+    return await jap_request(
+        "status",
+        order=order_id,
+    )
 
 
-app = mcp.streamable_http_app()
+# --------------------------------------------------
+# TRANSPORT SECURITY
+# --------------------------------------------------
+
+security = TransportSecuritySettings(
+    allowed_hosts=[
+        "jap2.onrender.com",
+        "jap2.onrender.com:*",
+    ],
+)
+
+
+# --------------------------------------------------
+# ASGI APPLICATION
+# --------------------------------------------------
+
+app = mcp.streamable_http_app(
+    transport_security=security,
+)
