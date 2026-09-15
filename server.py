@@ -1,12 +1,79 @@
 import os
 import httpx
+import jwt
 
-from mcp.server.fastmcp import FastMCP
+from pydantic import AnyHttpUrl
+from jwt import PyJWKClient
+
+from mcp.server import MCPServer
+from mcp.server.auth.provider import AccessToken, TokenVerifier
+from mcp.server.auth.settings import AuthSettings
+
 
 JAP_API_URL = "https://justanotherpanel.com/api/v2"
 JAP_API_KEY = os.environ.get("JAP_API_KEY")
 
-mcp = FastMCP("JAP Connector")
+AUTH0_DOMAIN = os.environ.get("AUTH0_DOMAIN")
+AUTH0_AUDIENCE = os.environ.get("AUTH0_AUDIENCE")
+
+if not AUTH0_DOMAIN:
+    raise RuntimeError("AUTH0_DOMAIN is not configured")
+
+if not AUTH0_AUDIENCE:
+    raise RuntimeError("AUTH0_AUDIENCE is not configured")
+
+AUTH0_ISSUER = f"https://{AUTH0_DOMAIN}/"
+AUTH0_JWKS_URL = f"https://{AUTH0_DOMAIN}/.well-known/jwks.json"
+
+jwks_client = PyJWKClient(AUTH0_JWKS_URL)
+
+
+class Auth0TokenVerifier(TokenVerifier):
+    async def verify_token(self, token: str) -> AccessToken | None:
+        try:
+            signing_key = jwks_client.get_signing_key_from_jwt(token)
+
+            payload = jwt.decode(
+                token,
+                signing_key.key,
+                algorithms=["RS256"],
+                audience=AUTH0_AUDIENCE,
+                issuer=AUTH0_ISSUER,
+            )
+
+            scopes = payload.get("scope", "").split()
+
+            client_id = (
+                payload.get("azp")
+                or payload.get("client_id")
+                or "auth0-client"
+            )
+
+            return AccessToken(
+                token=token,
+                client_id=client_id,
+                scopes=scopes,
+                expires_at=payload.get("exp"),
+                resource=AUTH0_AUDIENCE,
+                subject=payload.get("sub"),
+                claims=payload,
+            )
+
+        except Exception as exc:
+            print(f"Token verification failed: {exc}")
+            return None
+
+
+mcp = MCPServer(
+    "JAP Connector",
+    token_verifier=Auth0TokenVerifier(),
+    auth=AuthSettings(
+        issuer_url=AnyHttpUrl(AUTH0_ISSUER),
+        resource_server_url=AnyHttpUrl(AUTH0_AUDIENCE),
+        required_scopes=[],
+        validate_token_resource=False,
+    ),
+)
 
 
 async def jap_request(action: str, **kwargs):
