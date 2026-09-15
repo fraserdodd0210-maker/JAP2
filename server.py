@@ -59,12 +59,12 @@ class Auth0TokenVerifier(TokenVerifier):
                 claims=payload,
             )
 
-        except Exception as exc:
-    print(
-        f"Token verification failed: {type(exc).__name__}: {exc}",
-        flush=True,
-    )
-    return None
+                  except Exception as exc:
+            print(
+                f"Token verification failed: {type(exc).__name__}: {exc}",
+                flush=True,
+            )
+            return None
 
 
 mcp = MCPServer(
